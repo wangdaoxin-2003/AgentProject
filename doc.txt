@@ -1,0 +1,225 @@
+main.py
+负责HTTP：接收请求、检验请求、调用Runtime、返回响应
+schemas.py
+负责数据结构：定义请求和响应格式
+runtime.py
+负责Agent调度执行流程：识别意图、找到工具、执行工具、返回结果
+intent.py
+负责意图识别：天气->weather 计算->calculator  其他->chat
+tool_registry.py
+负责保存工具：weather->WeatherTool  calculator->CalculatorTool
+tools.py
+负责工具自己的业务逻辑：CalculatorTool：提取参数、推断运算符、执行计算、处理除零错误
+parameter_extrator.py
+负责从自然语言中提取结构化参数
+请求
+ ↓
+FastAPI
+ ↓
+AgentRequest
+ ↓
+Runtime
+ ↓
+IntentRecognizer
+ ↓
+ToolRegistry
+ ↓
+WeatherTool
+ ↓
+返回结果
+------------更加合理的执行路线--------------
+weather
+    ↓
+Fast Path
+    ↓
+WeatherTool
+
+calculator
+    ↓
+Fast Path
+    ↓
+CalculatorTool
+
+chat
+    ↓
+LLM Path
+    ↓
+调用大模型
+------------------------------------------------------
+用户请求
+      │
+      ▼
+Runtime
+      │
+      ▼
+Path Selector（新增）
+      ├──────────────┐
+      ▼              ▼               ▼
+ Fast Path      LLM Path      Workflow Path
+      │              │               │
+      ▼              ▼               ▼
+ Tool         LLM Client      Workflow Engine
+ --------------------------------------------------------
+ AgentRuntime
+    ↓
+IntentRecognizer
+    ↓
+PathSelector
+    │
+    ├── FastPathHandler
+    │      ↓
+    │   ToolRegistry
+    │      ↓
+    │     Tool
+    │
+    ├── LLMPathHandler
+    │      ↓
+    │  MockLLMClient
+    │
+    └── Workflow
+          ↓
+       暂未实现
+---------------------------第二阶段-----------------------------
+FastAPI
+    │
+main.py
+    │
+ApplicationContainer
+    │
+AgentRuntime
+    │
+IntentRecognizer
+    │
+PathSelector
+    │
+PathHandlerRegistry
+      │
+      ├── FastPathHandler
+      │        │
+      │        └── ToolRegistry
+      │                 │
+      │                 └── Tool
+      │
+      ├── LLMPathHandler
+      │        │
+      │        └── BaseLLMClient
+      │                 │
+      │                 └── MockLLMClient
+      │
+      └── WorkflowPathHandler
+------------------------自己理解---------------------------------------
+用户发出请求由FastApi接收后经过Main-runtime-先去进行意图识别（天气、计算、工作流、聊天）-进行路径选择（天气和计算划分为快速路径、聊天为LLM路径、工作流为工作流路径）
+快速路径：通过工具仓库注册好的工具去调用工具处理代码
+LLM路径：通过LLM处理代码
+工作流路径：通过工作流处理代码
+FastAPI
+|
+main
+|
+applicationContainer（注册好所需要的类，意图识别，路径选择，工具仓库，工具）
+|
+runtime（调度中心）
+|
+IntentRecognizer
+|
+PathSelector
+|
+PathHandlerRegistry（路径调用注册）
+|
+FastPthHandler|LLMPathHandler|WorkflowPathHandler
+|                      |                |
+ToolRegistry       PromptBuilder       待做
+|                      |
+Tool              ConversationHistory
+                       |
+                   LLMClint
+                       |
+                      chat
+                       |
+                   Toolcall
+                       |
+                   ToolRegistry
+                       |
+                      Tool
+----------------------------完整理解---------------------------------------
+                 用户请求
+                    |
+                    ↓
+                 FastAPI
+                    |
+                    ↓
+                 main.py
+                    |
+                    ↓
+        ApplicationContainer
+        （负责创建和组装）
+                    |
+                    ↓
+              AgentRuntime
+          （负责调度，不负责执行）
+                    |
+        ------------------------
+        |          |           |
+        ↓          ↓           ↓
+
+ Intent       Path        Handler
+Recognizer   Selector     Registry
+
+
+                    |
+                    ↓
+
+        -------------------------
+        |          |            |
+        ↓          ↓            ↓
+
+
+ FastPath    LLMPath       WorkflowPath
+ Handler     Handler       Handler
+
+
+    |           |
+    |           |
+    ↓           ↓
+
+
+ToolRegistry   PromptBuilder
+    |           |
+    ↓           ConversationHistory
+ Tool           |
+                ↓
+             LLMClient
+                |
+                ↓
+              LLM
+                |
+          ----------------
+          |              |
+          ↓              ↓
+
+      Answer        ToolCall
+
+                         |
+                         ↓
+
+                    ToolRegistry
+
+                         |
+                         ↓
+
+                       Tool
+    
+                         |
+                         ↓
+
+                    ToolResult
+
+                         |
+                         ↓
+
+                      LLM
+
+                         |
+                         ↓
+
+                   最终回答
