@@ -1,0 +1,38 @@
+# Test your FastAPI endpoints
+
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/hello/User
+Accept: application/json
+
+###
+###
+
+POST http://127.0.0.1:8001/agent/run
+Content-Type: application/json
+
+{
+  "message": "帮我计算1+2",
+  "user_id": "user_001"
+}
+
+###
+POST http://127.0.0.1:8001/agent/run
+Content-Type: application/json
+
+{
+  "message": "你好，请介绍一下自己",
+  "user_id": "user_001"
+}
+###
+
+POST http://127.0.0.1:8001/agent/run
+Content-Type: application/json
+
+{
+  "message": "开始工作",
+  "user_id": "user_001"
+}
