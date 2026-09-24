@@ -1,8 +1,9 @@
 import os
 from openai import OpenAI
 
+import json
 from llm.base_llm_client import BaseLLMClient
-from schemas import LLMMessage, LLMResult
+from schemas import LLMMessage, LLMResult,ToolCall
 
 
 class DoubaoLLMClient(BaseLLMClient):
@@ -25,18 +26,70 @@ class DoubaoLLMClient(BaseLLMClient):
 
     def chat(self, messages: list[LLMMessage]) -> LLMResult:
         try:
-            request_messages = [
-                {
-                    "role": message.role.value,
-                    "content": message.content
+            request_messages = []
+            for message in messages:
+                request_message={
+                    "role":message.role.value,
+                    "content":message.content
                 }
-                for message in messages
+                if message.tool_calls:
+                    request_message["tool_calls"] = [
+                        {
+                            "id": tool_call.id,
+                            "type":"function",
+                            "function":{
+                                "name":tool_call.name,
+                                "arguments":json.dumps(
+                                    tool_call.arguments,
+                                    ensure_ascii=False
+                                )
+                            }
+                        }
+                        for tool_call in message.tool_calls
+                    ]
+                if message.tool_call_id:
+                    request_message["tool_call_id"] = message.tool_call_id
+                request_messages.append(request_message)
+            tools = [
+                {
+                    "type":"function",
+                    "function":{
+                        "name":"calculator",
+                        "description":"执行数学计算。当用户要求进行数学计算时，应使用此工具进行计算，不要自行计算结果。",
+                        "parameters":{
+                            "type":"object",
+                            "properties":{
+                                "expression": {
+                                    "type": "string",
+                                    "description": "需要计算的数学表达式，例如10+20"
+                                }
+                            },
+                            "required": ["expression"]
+                        }
+                    }
+                }
             ]
+            # print(request_messages)
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=request_messages
+                messages=request_messages,
+                tools=tools
             )
 
+            response_message =response.choices[0].message
+            tool_calls =[]
+            if response_message.tool_calls:
+                for tool_call in response_message.tool_calls:
+                    arguments = json.loads(
+                        tool_call.function.arguments
+                    )
+                    tool_calls.append(
+                        ToolCall(
+                            id = tool_call.id,
+                            name=tool_call.function.name,
+                            arguments= arguments
+                        )
+                    )
             assistant_content = (
                     response.choices[0].message.content or ""
             )
@@ -53,6 +106,7 @@ class DoubaoLLMClient(BaseLLMClient):
                 data={
                     "content":assistant_content
                 },
+                tool_calls=tool_calls,
                 usage=usage,
                 error=None
             )

@@ -3,6 +3,7 @@ from llm.base_llm_client import BaseLLMClient
 from schemas import AgentResponse, LLMMessage, MessageRole, LLMResult
 from handlers.base_path_handler import BasePathHandler
 from prompt.prompt_builder import PromptBuilder
+import json
 from tool_registry import ToolRegistry
 
 
@@ -19,62 +20,71 @@ class LLMPathHandler(BasePathHandler):
             history_messages = self.conversation_history.get_history(user_id=user_id)
             messages = self.prompt_builder.build(user_message=message,
                                                  history_messages=history_messages)
-            llm_result = self.llm_client.chat(messages)
+            max_iterations = 5
+            iteration = 0
+            while True:
 
-            if llm_result.tool_calls:
-                first_tool_call=llm_result.tool_calls[0]
-                tool = self.tool_registry.get_tool(
-                    first_tool_call.name
-                )
-                if tool is None:
+                if iteration >= max_iterations:
                     return AgentResponse(
-                        message="未找到对应的工具",
+                        message="Tool Loop超过最大执行次数",
                         user_id=user_id,
                         intent=intent,
                         execution_path="llm",
                         status="failed",
                         result=None,
-                        error="未找到对应的工具"
+                        error=f"Tool Loop超过最大执行次数：{max_iterations}"
                     )
-                tool_result = tool.execute(first_tool_call.arguments)
+
+                iteration += 1
+
+                llm_result = self.llm_client.chat(messages)
+
+                if llm_result.success is not True:
+                    return AgentResponse(
+                        message="LLM执行失败",
+                        user_id=user_id,
+                        intent=intent,
+                        execution_path="llm",
+                        status="failed",
+                        result=None,
+                        error=llm_result.error
+
+                    )
+
+                if not llm_result.tool_calls:
+                    break
                 messages.append(
                     LLMMessage(
-                        role=MessageRole.TOOL,
-                        content=str(tool_result.data),
+                        role=MessageRole.ASSISTANT,
+                        content=None,
+                        tool_calls=llm_result.tool_calls
                     )
                 )
-                final_result = self.llm_client.chat(messages)
-                final_content=""
-                if final_result.data:
-                    final_content = final_result.data.get("content","")
-                return AgentResponse(
-                    message=final_content,
-                    user_id=user_id,
-                    intent=intent,
-                    execution_path="llm",
-                    status="success",
-                    result={
-                        "tool_result":tool_result.model_dump(),
-                        "final_llm_result":final_result.model_dump(),
-                        "tool_call":{
-                            "id":first_tool_call.id,
-                            "name":first_tool_call.name,
-                            "arguments":first_tool_call.arguments
-                        }
-                    },
-                    error=None
-                )
 
-            if llm_result.success is not True:
-                return AgentResponse(
-                    message="LLM执行失败",
-                    user_id=user_id,
-                    intent=intent,
-                    execution_path="llm",
-                    status="failed",
-                    result=llm_result.model_dump(),
-                    error=llm_result.error
-                )
+                for tool_call in llm_result.tool_calls:
+                    tool = self.tool_registry.get_tool(tool_call.name)
+                    if tool is None:
+                        return AgentResponse(
+                            message="未找到对应工具",
+                            user_id=user_id,
+                            intent=intent,
+                            execution_path="llm",
+                            status="failed",
+                            error=f"工具不存在：{tool_call.name}"
+                        )
+                    tool_result = tool.execute(tool_call.arguments)
+                    messages.append(
+                        LLMMessage(
+                            role=MessageRole.TOOL,
+                            content=json.dumps(
+                                tool_result.model_dump(),
+                                ensure_ascii=False
+                            ),
+                            tool_call_id=tool_call.id
+                        )
+                    )
+
+
             assistant_content = ""
             if llm_result.data is not None:
                 assistant_content = str(llm_result.data.get("content"))

@@ -22,7 +22,7 @@ class AgentRuntime:  # Agent运行控制器
         try:
             intent = self.intent_recognizer.recognize(message)
             path = self.path_selector.select(intent)
-            print(f"执行路径选择：{path}")
+            # print(f"执行路径选择：{path}")
             handler = self.path_handler_registry.get_handler(path)
             if handler is None:
                 return AgentResponse(
