@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.egg-link
+*.egg-info
+*.egg-
+.idea/
+logs/
+*.log
