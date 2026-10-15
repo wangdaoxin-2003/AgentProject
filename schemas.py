@@ -7,6 +7,7 @@ from enum import Enum
 class AgentRequest(BaseModel):  # 负责约束客户端传进来的数据的格式
     message: str
     user_id: str
+    workflow_inputs: dict[str, Any] | None = None
 
 
 class AgentResponse(BaseModel):  # 负责约束服务器返回的数据格式
@@ -64,7 +65,6 @@ class MessageRole(str, Enum):
 
 class LLMMessage(BaseModel):
     role: MessageRole
-    content: str| None = None
+    content: str | None = None
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
-

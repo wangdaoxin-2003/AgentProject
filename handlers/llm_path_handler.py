@@ -4,8 +4,10 @@ from schemas import AgentResponse, LLMMessage, MessageRole, LLMResult
 from handlers.base_path_handler import BasePathHandler
 from prompt.prompt_builder import PromptBuilder
 import json
+import logging
 from tool_registry import ToolRegistry
 
+logger = logging.getLogger(__name__)
 
 class LLMPathHandler(BasePathHandler):
     def __init__(self, llm_client: BaseLLMClient, prompt_builder: PromptBuilder,
@@ -25,6 +27,11 @@ class LLMPathHandler(BasePathHandler):
             while True:
 
                 if iteration >= max_iterations:
+                    logger.warning(
+                        "tool loop max iterations reached: user_id=%s max_iterations=%s",
+                        user_id,
+                        max_iterations
+                    )
                     return AgentResponse(
                         message="Tool Loop超过最大执行次数",
                         user_id=user_id,
@@ -37,9 +44,17 @@ class LLMPathHandler(BasePathHandler):
 
                 iteration += 1
 
+                logger.info("tool loop iteration started: user_id=%s iteration=%s",user_id,iteration)
+
                 llm_result = self.llm_client.chat(messages)
 
                 if llm_result.success is not True:
+                    logger.error(
+                        "llm execution failed in tool loop: user_id=%s iteration=%s error=%s",
+                        user_id,
+                        iteration,
+                        llm_result.error
+                    )
                     return AgentResponse(
                         message="LLM执行失败",
                         user_id=user_id,
@@ -52,7 +67,20 @@ class LLMPathHandler(BasePathHandler):
                     )
 
                 if not llm_result.tool_calls:
+                    logger.info(
+                        "tool loop completed: user_id=%s iteration=%s",
+                        user_id,
+                        iteration
+                    )
                     break
+
+                logger.info(
+                    "tool calls requested: user_id=%s iteration=%s count=%s",
+                    user_id,
+                    iteration,
+                    len(llm_result.tool_calls)
+                )
+
                 messages.append(
                     LLMMessage(
                         role=MessageRole.ASSISTANT,
@@ -64,6 +92,13 @@ class LLMPathHandler(BasePathHandler):
                 for tool_call in llm_result.tool_calls:
                     tool = self.tool_registry.get_tool(tool_call.name)
                     if tool is None:
+
+                        logger.warning(
+                            "tool not found: user_id=%s iteration=%s tool=%s",
+                            user_id,
+                            iteration,
+                            tool_call.name
+                        )
                         return AgentResponse(
                             message="未找到对应工具",
                             user_id=user_id,
@@ -72,7 +107,23 @@ class LLMPathHandler(BasePathHandler):
                             status="failed",
                             error=f"工具不存在：{tool_call.name}"
                         )
+
+                    logger.info(
+                        "tool execution started: user_id=%s iteration=%s tool=%s",
+                        user_id,
+                        iteration,
+                        tool_call.name
+                    )
+
                     tool_result = tool.execute(tool_call.arguments)
+
+                    logger.info(
+                        "tool execution completed: user_id=%s iteration=%s tool=%s success=%s",
+                        user_id,
+                        iteration,
+                        tool_call.name,
+                        tool_result.success
+                    )
                     messages.append(
                         LLMMessage(
                             role=MessageRole.TOOL,
@@ -112,6 +163,13 @@ class LLMPathHandler(BasePathHandler):
                 error=None
             )
         except Exception as e:
+
+            logger.exception(
+                "llm path execution failed: user_id=%s intent=%s",
+                user_id,
+                intent
+            )
+
             return AgentResponse(
                 message="LLM执行异常",
                 user_id=user_id,

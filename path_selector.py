@@ -13,6 +13,6 @@ class PathSelector:
             return PathType.FAST
         if intent in ["chat"]:
             return PathType.LLM
-        if intent in ["workflow"]:
+        if intent in ["workflow","double_calculation"]:
             return PathType.WORKFLOW
         return PathType.FAST

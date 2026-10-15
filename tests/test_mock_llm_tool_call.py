@@ -41,7 +41,7 @@ def test_invalid_arguments() -> None:
     print("错误参数结果：", result)
 
     assert result.success is False
-    assert result.error == "没有识别到有效的计算参数"
+    assert result.error == "没有识别到表达式"
 
 
 def main() -> None:
@@ -50,7 +50,7 @@ def main() -> None:
     test_invalid_arguments()
 
     print("CalculatorTool 输入兼容测试通过")
-
+    
 
 if __name__ == "__main__":
     main()

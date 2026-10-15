@@ -223,3 +223,33 @@ ToolRegistry   PromptBuilder
                          ↓
 
                    最终回答
+=====================10月5日==========================
+
+
+
+                     LLM
+                      │
+                 调用成功？
+                 /       \
+               否         是
+               ↓           ↓
+            failed      ToolCalls？
+                         /      \
+                       无        有
+                       ↓         ↓
+                    Final     Assistant Message
+                                  ↓
+                           for 每个 ToolCall
+                                  ↓
+                            ToolRegistry
+                                  ↓
+                              Tool.execute
+                                  ↓
+                              ToolResult
+                                  ↓
+                            标准 JSON 回传
+                                  │
+                                  └────→ 下一轮 LLM
+
+
+

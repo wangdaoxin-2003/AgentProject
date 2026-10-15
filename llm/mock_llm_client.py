@@ -12,6 +12,19 @@ class MockLLMClient(BaseLLMClient):
                 usage=None,
                 error="messages 不能为空"
             )
+        latest_tool_message = self._get_latest_tool_message(messages)
+        if latest_tool_message is not None:
+            return LLMResult(
+                model="mock-llm",
+                success=True,
+                data={
+                    "content":f"工具执行结果：{latest_tool_message.content}"
+                },
+                tool_calls=[],
+                usage=None,
+                error=None
+            )
+
         latest_user_message = self._get_latest_user_message(messages)
         if latest_user_message is None:
             return LLMResult(
@@ -48,13 +61,18 @@ class MockLLMClient(BaseLLMClient):
             data={
                 "content": f"这是 Mock LLM收到消息：{latest_user_content}",
             },
-            tool_calls=None,
+            tool_calls=[],
             usage=None,
             error=None
         )
 
-    def _get_latest_user_message(self, messages: list[LLMMessage]) -> LLMMessage:
+    def _get_latest_user_message(self, messages: list[LLMMessage]) -> LLMMessage | None:
         for message in reversed(messages):
             if message.role == MessageRole.USER:
+                return message
+        return None
+    def _get_latest_tool_message(self,messages:list[LLMMessage]) -> LLMMessage | None:
+        for message in reversed(messages):
+            if message.role == MessageRole.TOOL:
                 return message
         return None

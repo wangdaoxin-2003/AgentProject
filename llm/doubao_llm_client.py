@@ -2,9 +2,11 @@ import os
 from openai import OpenAI
 
 import json
+import logging
 from llm.base_llm_client import BaseLLMClient
 from schemas import LLMMessage, LLMResult,ToolCall
 
+logger = logging.getLogger(__name__)
 
 class DoubaoLLMClient(BaseLLMClient):
     def __init__(self) -> None:
@@ -70,6 +72,8 @@ class DoubaoLLMClient(BaseLLMClient):
                 }
             ]
             # print(request_messages)
+            logger.info("llm request started: model=%s message_count=%s",self.model,len(messages))
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=request_messages,
@@ -100,6 +104,8 @@ class DoubaoLLMClient(BaseLLMClient):
                     "output_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens
                 }
+            logger.info("llm request completed: model=%s tool_call_count=%s",self.model,len(tool_calls))
+
             return LLMResult(
                 model=self.model,
                 success=True,
@@ -111,6 +117,8 @@ class DoubaoLLMClient(BaseLLMClient):
                 error=None
             )
         except Exception as exc:
+
+            logger.exception("llm request failed: model=%s",self.model)
             return LLMResult(
                 model=self.model,
                 success=False,
