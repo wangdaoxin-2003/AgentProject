@@ -34,7 +34,7 @@ class WorkflowPathHandler(BasePathHandler):
             inputs=workflow_inputs if workflow_inputs is not None else {}
         )
 
-        workflow_result = self.workflow_engine.execute(workflow,context)
+        workflow_result = self.workflow_engine.execute(workflow, context)
         if workflow_result.success:
             return AgentResponse(
                 message="Workflow执行成功",

@@ -253,3 +253,25 @@ ToolRegistry   PromptBuilder
 
 
 
+===================10月24日 WorkflowStep创建==========================
+WorkflowStep
+    ↓
+Workflow
+    ↓
+WorkflowRegistry
+    ↓
+WorkflowEngine
+    ├── ToolRegistry
+    ├── Tool.execute()
+    ├── WorkflowStepResult
+    ├── WorkflowResult
+    └── Fail Fast
+    ↓
+WorkflowContext
+    ├── inputs
+    └── step_outputs
+    ↓
+_resolve_arguments()
+    ├── 完整占位符
+    ├── Step 输出引用
+    └── 字符串模板
