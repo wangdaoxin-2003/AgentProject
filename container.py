@@ -1,5 +1,5 @@
-
-from conversation.history import ConversationHistory
+from conversation import context_window_manager
+from conversation.context_window_manager import ContextWindowManager
 from conversation.sqlite_history import SQLiteConversationHistory
 from handlers.fast_path_handler import FastPathHandler
 from handlers.llm_path_handler import LLMPathHandler
@@ -77,7 +77,13 @@ class ApplicationContainer:
             max_messages=20
         )
         conversation_history.create_table()
-        llm_path_handler = LLMPathHandler(llm_client=llm_client,prompt_builder=prompt_builder, conversation_history=conversation_history,tool_registry=tool_registry)
+        context_window_manager=ContextWindowManager(max_tokens=1000)
+        llm_path_handler = LLMPathHandler(
+            llm_client=llm_client,prompt_builder=prompt_builder,
+            conversation_history=conversation_history,
+            tool_registry=tool_registry,
+            context_window_manager=context_window_manager
+        )
         workflow_path_handler = WorkflowPathHandler(
             workflow_registry=workflow_registry,
             workflow_engine=workflow_engine

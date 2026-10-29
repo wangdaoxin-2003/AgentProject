@@ -1,4 +1,7 @@
+from click import Context
+
 from conversation.base_history import BaseConversationHistory
+from conversation.context_window_manager import ContextWindowManager
 from conversation.history import ConversationHistory
 from llm.base_llm_client import BaseLLMClient
 from schemas import AgentResponse, LLMMessage, MessageRole, LLMResult
@@ -10,17 +13,42 @@ from tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+
 class LLMPathHandler(BasePathHandler):
     def __init__(self, llm_client: BaseLLMClient, prompt_builder: PromptBuilder,
-                 conversation_history: BaseConversationHistory,tool_registry: ToolRegistry):
+                 conversation_history: BaseConversationHistory, tool_registry: ToolRegistry,
+                 context_window_manager: ContextWindowManager | None = None
+                 ):
         self.llm_client = llm_client
         self.prompt_builder = prompt_builder
         self.conversation_history = conversation_history
+        self.context_window_manager=context_window_manager
         self.tool_registry = tool_registry
 
     def handle(self, message: str, user_id: str, intent: str) -> AgentResponse:
         try:
             history_messages = self.conversation_history.get_history(user_id=user_id)
+
+            if self.context_window_manager is not None:
+                base_messages = self.prompt_builder.build(
+                    user_message=message,
+                    history_messages=[]
+                )
+                system_tokens = self.context_window_manager.estimate_tokens(
+                    base_messages[0]
+                )
+                user_tokens=self.context_window_manager.estimate_tokens(
+                    base_messages[-1]
+                )
+                model_context_limit=8000
+                reserved_tokens=1500
+                history_budget=self.context_window_manager.calculate_history_budget(
+                    model_context_limit=model_context_limit,
+                    system_tokens=system_tokens,
+                    user_tokens=user_tokens,
+                    reserved_tokens=reserved_tokens,)
+                history_messages=self.context_window_manager.trim_history(history_messages,max_tokens=history_budget)
+
             messages = self.prompt_builder.build(user_message=message,
                                                  history_messages=history_messages)
             max_iterations = 5
@@ -45,7 +73,8 @@ class LLMPathHandler(BasePathHandler):
 
                 iteration += 1
 
-                logger.info("tool loop iteration started: user_id=%s iteration=%s",user_id,iteration)
+                logger.info("tool loop iteration started: user_id=%s iteration=%s", user_id,
+                            iteration)
 
                 llm_result = self.llm_client.chat(messages)
 
@@ -93,7 +122,6 @@ class LLMPathHandler(BasePathHandler):
                 for tool_call in llm_result.tool_calls:
                     tool = self.tool_registry.get_tool(tool_call.name)
                     if tool is None:
-
                         logger.warning(
                             "tool not found: user_id=%s iteration=%s tool=%s",
                             user_id,
@@ -135,7 +163,6 @@ class LLMPathHandler(BasePathHandler):
                             tool_call_id=tool_call.id
                         )
                     )
-
 
             assistant_content = ""
             if llm_result.data is not None:

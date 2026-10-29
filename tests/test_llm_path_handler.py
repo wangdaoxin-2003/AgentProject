@@ -1,11 +1,18 @@
 import pytest
+from openai.types.beta.threads import message
+
+from conversation import context_window_manager
+from conversation.context_window_manager import ContextWindowManager
 from conversation.history import ConversationHistory
 from handlers.llm_path_handler import LLMPathHandler
+from llm import mock_llm_client
 from llm.base_llm_client import BaseLLMClient
 from llm.mock_llm_client import MockLLMClient
+from prompt import prompt_builder
 from prompt.prompt_builder import PromptBuilder
 from schemas import MessageRole, LLMMessage, LLMResult, ToolCall
 from tool_registry import ToolRegistry
+from workflow_practice.test_step_reference import tool_registry
 
 
 class ToolNotFoundLLMClient(BaseLLMClient):
@@ -213,3 +220,89 @@ def test_max_iterations():#模型不断调用 Tool 时 Runtime 强制停止
 
     assert response.status == "failed"
 
+class RecordingLLMClient(MockLLMClient):
+
+    def __init__(self):
+        super().__init__()
+        self.received_messages = []
+
+    def chat(self, messages: list[LLMMessage]) -> LLMResult:
+        self.received_messages = list(messages)
+
+        return super().chat(messages)
+def test_llm_path_handler_trims_history():
+    # 1. 创建 MockLLMClient
+    mock_llm_client=RecordingLLMClient()
+    # 2. 创建 ConversationHistory
+    conversation_history=ConversationHistory(max_messages=20)
+    # 3. 预先添加三条历史消息
+    message=LLMMessage(
+        role=MessageRole.USER,
+        content="消息一一"
+    )
+    message1 = LLMMessage(
+        role=MessageRole.ASSISTANT,
+        content="消息二二"
+    )
+    message2 = LLMMessage(
+        role=MessageRole.USER,
+        content="消息三三"
+    )
+    conversation_history.add_message("user_001",message)
+    conversation_history.add_message("user_001", message1)
+    conversation_history.add_message("user_001", message2)
+    # 4. 创建 ContextWindowManager(max_tokens=4)
+    context_window_manager=FixedBudgetContextWindowManager()
+    # 5. 创建 LLMPathHandler 并注入管理器
+    prompt_builder=PromptBuilder()
+    tool_registry=ToolRegistry()
+    llm_path_handler=LLMPathHandler(
+        llm_client=mock_llm_client,
+        prompt_builder=prompt_builder,
+        tool_registry=tool_registry,
+        conversation_history=conversation_history,
+        context_window_manager=context_window_manager
+    )
+
+    # 6. 调用 handle()
+    llm_path_handler.handle("你知道我叫什么名字吗","user_001","聊天")
+    # 7. 验证 LLM 收到的消息
+    assert context_window_manager.calculate_called is True
+    assert context_window_manager.received_budget == 4
+    contents=[
+        message.content
+        for message in mock_llm_client.received_messages
+    ]
+    assert "消息一一" not in contents
+    assert "消息二二" in contents
+    assert "消息三三" in contents
+    assert "你知道我叫什么名字吗" in contents
+    assert mock_llm_client.received_messages[0].role == MessageRole.SYSTEM
+class FixedBudgetContextWindowManager(ContextWindowManager):
+
+    def __init__(self):
+        super().__init__(max_tokens=1000)
+        self.calculate_called = False
+        self.received_budget = None
+
+    def calculate_history_budget(
+        self,
+        model_context_limit: int,
+        system_tokens: int,
+        user_tokens: int,
+        reserved_tokens: int
+    ) -> int:
+        self.calculate_called = True
+        return 4
+
+    def trim_history(
+            self,
+            history_messages: list[LLMMessage],
+            max_tokens: int | None = None
+    ) -> list[LLMMessage]:
+        self.received_budget = max_tokens
+
+        return super().trim_history(
+            history_messages,
+            max_tokens=max_tokens
+        )
