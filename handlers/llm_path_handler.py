@@ -1,3 +1,4 @@
+from conversation.base_history import BaseConversationHistory
 from conversation.history import ConversationHistory
 from llm.base_llm_client import BaseLLMClient
 from schemas import AgentResponse, LLMMessage, MessageRole, LLMResult
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class LLMPathHandler(BasePathHandler):
     def __init__(self, llm_client: BaseLLMClient, prompt_builder: PromptBuilder,
-                 conversation_history: ConversationHistory,tool_registry: ToolRegistry):
+                 conversation_history: BaseConversationHistory,tool_registry: ToolRegistry):
         self.llm_client = llm_client
         self.prompt_builder = prompt_builder
         self.conversation_history = conversation_history

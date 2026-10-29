@@ -1,7 +1,8 @@
+from conversation.base_history import BaseConversationHistory
 from schemas import LLMMessage
 
 
-class ConversationHistory:
+class ConversationHistory(BaseConversationHistory):
     def __init__(self, max_messages: int = 20):
 
         if max_messages <= 0:

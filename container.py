@@ -1,5 +1,6 @@
 
 from conversation.history import ConversationHistory
+from conversation.sqlite_history import SQLiteConversationHistory
 from handlers.fast_path_handler import FastPathHandler
 from handlers.llm_path_handler import LLMPathHandler
 from handlers.workflow_path_handler import WorkflowPathHandler
@@ -71,7 +72,11 @@ class ApplicationContainer:
 
 
         prompt_builder = PromptBuilder()
-        conversation_history = ConversationHistory()
+        conversation_history =SQLiteConversationHistory(
+            db_path="data/agent_memory.db",
+            max_messages=20
+        )
+        conversation_history.create_table()
         llm_path_handler = LLMPathHandler(llm_client=llm_client,prompt_builder=prompt_builder, conversation_history=conversation_history,tool_registry=tool_registry)
         workflow_path_handler = WorkflowPathHandler(
             workflow_registry=workflow_registry,
